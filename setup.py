@@ -148,7 +148,7 @@ setup(
     name="detectron2",
     version=get_version(),
     author="FAIR",
-    url="https://github.com/facebookresearch/detectron2",
+    url="https://github.com/pramishp/detectron2",
     description="Detectron2 is FAIR's next-generation research "
     "platform for object detection and segmentation.",
     packages=find_packages(exclude=("configs", "tests*")) + list(PROJECTS.keys()),
