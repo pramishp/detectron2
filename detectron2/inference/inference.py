@@ -27,7 +27,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-config_file = os.path.join(bpath, 'configs/mobile_parsing_rcnn_b_wc2m_s3x.yaml')
+config_file = os.path.join(bpath, 'detectron2/model_zoo/configs/mobile_parsing_rcnn_b_wc2m_s3x.yaml')
 model_path = os.path.join(bpath, 'models/mobile_parsing_rcnn_b_wc2m_s3x.pth')
 
 # setup config

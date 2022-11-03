@@ -135,7 +135,6 @@ def get_model_zoo_configs() -> List[str]:
     )
     return config_paths
 
-
 # For projects that are relative small and provide features that are very close
 # to detectron2's core functionalities, we install them under detectron2.projects
 PROJECTS = {
@@ -153,7 +152,10 @@ setup(
     "platform for object detection and segmentation.",
     packages=find_packages(exclude=("tests*")) + list(PROJECTS.keys()),
     package_dir=PROJECTS,
-    package_data={"detectron2.model_zoo": get_model_zoo_configs(), "": ["*.yaml", "*.pth"]},
+    package_data={"detectron2.model_zoo": get_model_zoo_configs(),
+                  'models': ['models/mobile_parsing_rcnn_b_s3x.pth',
+                             'models/mobile_parsing_rcnn_b_wc2m_s3x.pth']
+                  },
     python_requires=">=3.7",
     install_requires=[
         # These dependencies are not pure-python.
