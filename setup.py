@@ -135,12 +135,45 @@ def get_model_zoo_configs() -> List[str]:
     )
     return config_paths
 
+def get_models() -> List[str]:
+    """
+    Return a list of configs to include in package for model zoo. Copy over these configs inside
+    detectron2/model_zoo/models.
+    """
+
+    # Use absolute paths while symlinking.
+    source_configs_dir = path.join(path.dirname(path.realpath(__file__)), "models")
+    destination = path.join(
+        path.dirname(path.realpath(__file__)), "detectron2", "models", "models"
+    )
+    # Symlink the config directory inside package to have a cleaner pip install.
+
+    # Remove stale symlink/directory from a previous build.
+    if path.exists(source_configs_dir):
+        if path.islink(destination):
+            os.unlink(destination)
+        elif path.isdir(destination):
+            shutil.rmtree(destination)
+
+    if not path.exists(destination):
+        try:
+            os.symlink(source_configs_dir, destination)
+        except OSError:
+            # Fall back to copying if symlink fails: ex. on Windows.
+            shutil.copytree(source_configs_dir, destination)
+
+    models_path = glob.glob("models/**/*.pth", recursive=True) + glob.glob(
+        "models/**/*.py", recursive=True
+    )
+    return models_path
+
 # For projects that are relative small and provide features that are very close
 # to detectron2's core functionalities, we install them under detectron2.projects
 PROJECTS = {
     "detectron2.projects.point_rend": "projects/PointRend/point_rend",
     "detectron2.projects.deeplab": "projects/DeepLab/deeplab",
     "detectron2.projects.panoptic_deeplab": "projects/Panoptic-DeepLab/panoptic_deeplab",
+    "detectron2.projects.densepose": "projects/DensePose/densepose",
 }
 
 setup(
@@ -150,12 +183,9 @@ setup(
     url="https://github.com/pramishp/detectron2",
     description="Detectron2 is FAIR's next-generation research "
     "platform for object detection and segmentation.",
-    packages=find_packages(exclude=("tests*")) + list(PROJECTS.keys()),
+    packages=find_packages(exclude=("tests*", "configs*")) + list(PROJECTS.keys()),
     package_dir=PROJECTS,
-    package_data={"detectron2.model_zoo": get_model_zoo_configs(),
-                  'models': ['models/mobile_parsing_rcnn_b_s3x.pth',
-                             'models/mobile_parsing_rcnn_b_wc2m_s3x.pth']
-                  },
+    package_data={"detectron2.model_zoo": get_model_zoo_configs(), "detectron2.models": get_models()},
     python_requires=">=3.7",
     install_requires=[
         # These dependencies are not pure-python.

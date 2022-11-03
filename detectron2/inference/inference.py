@@ -28,7 +28,7 @@ from torch import nn
 from torch.nn import functional as F
 
 config_file = os.path.join(bpath, 'detectron2/model_zoo/configs/mobile_parsing_rcnn_b_wc2m_s3x.yaml')
-model_path = os.path.join(bpath, 'models/mobile_parsing_rcnn_b_wc2m_s3x.pth')
+model_path = os.path.join(bpath, 'detectron2/models/models/mobile_parsing_rcnn_b_wc2m_s3x.pth')
 
 # setup config
 cfg = get_cfg()
@@ -79,8 +79,13 @@ def run(images):
 
 if __name__ == "__main__":
     from detectron2.data.detection_utils import read_image
+    import datetime
 
     input_img_path = '/Users/pramish/Desktop/Codes/mmexperiments/mm-densepose/data/rgbd/pramish/1.jpg'
     img = read_image(input_img_path, format="BGR")  # predictor expects BGR image.
-    results = run([img])
-    print()
+    imgs = [img] * 25
+    starttime = datetime.datetime.now()
+    results = run(imgs)
+    diff = (datetime.datetime.now() - starttime)
+    print("Time taken : ", diff)
+    print("FPS: ", diff.total_seconds() / len(imgs))
