@@ -8,7 +8,7 @@ from detectron2.modeling import BACKBONE_REGISTRY
 from detectron2.modeling.backbone.fpn import LastLevelMaxPool
 from timm.models.efficientnet_builder import BN_MOMENTUM_TF_DEFAULT, BN_EPS_TF_DEFAULT
 
-from fpn import BiFPN
+from detectron2.inference.fpn import BiFPN
 
 
 @BACKBONE_REGISTRY.register()
