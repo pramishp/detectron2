@@ -18,10 +18,10 @@ from densepose.vis.extractor import (
 )
 from densepose.structures import DensePoseChartPredictorOutput, DensePoseEmbeddingPredictorOutput
 
-from config import add_timmnets_config
+from detectron2.inference.config import add_timmnets_config
 
-import backbone
-import roi_heads
+from detectron2.inference import backbone
+from detectron2.inference import roi_heads
 
 import torch
 from torch import nn
@@ -67,7 +67,14 @@ def run(images):
         # iuv = np.stack((i, uv[1, :, :], uv[0, :, :]))
         iuv = np.concatenate((i[:, :, None], uv[0, :, :][:, :, None], uv[1, :, :][:, :, None]), axis=2)
         # iuv = np.transpose(iuv, (0,2,1))
-        results.append({'iuv': iuv, 'pred_box': pred_box, 'scores': result['scores']})
+        fine_seg_confidence = data[0]['pred_densepose'][0].__dict__['fine_segm_confidence'].cpu().numpy()
+        coarse_seg_confidence = data[0]['pred_densepose'][0].__dict__['coarse_segm_confidence'].cpu().numpy()
+
+        results.append({'iuv': iuv, 'pred_box': pred_box,
+                        'scores': result['scores'],
+                        'fine_seg_confidence': fine_seg_confidence,
+                        'coarse_seg_confidence': coarse_seg_confidence
+                        })
 
 
 if __name__ == "__main__":
