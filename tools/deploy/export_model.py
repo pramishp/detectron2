@@ -3,6 +3,8 @@
 import argparse
 import os
 from typing import Dict, List, Tuple
+
+import matplotlib.pyplot as plt
 import torch
 from torch import Tensor, nn
 
@@ -12,29 +14,44 @@ from detectron2.config import get_cfg
 from detectron2.data import build_detection_test_loader, detection_utils
 from detectron2.evaluation import COCOEvaluator, inference_on_dataset, print_csv_format
 from detectron2.export import (
-    STABLE_ONNX_OPSET_VERSION,
     TracingAdapter,
     dump_torchscript_IR,
     scripting_with_instances,
 )
 from detectron2.modeling import GeneralizedRCNN, RetinaNet, build_model
 from detectron2.modeling.postprocessing import detector_postprocess
-from detectron2.projects.point_rend import add_pointrend_config
 from detectron2.structures import Boxes
 from detectron2.utils.env import TORCH_VERSION
 from detectron2.utils.file_io import PathManager
 from detectron2.utils.logger import setup_logger
 
+fpath = os.path.dirname(os.path.abspath(__file__))
+bpath = os.path.join(fpath, '../../')
+densepose_path = os.path.join(bpath, 'projects/DensePose/')
+import sys
+sys.path.append(densepose_path)
 
+from densepose import add_densepose_config
+from detectron2.inference.config import add_timmnets_config
+from detectron2.data import DatasetMapper
+
+from detectron2.inference import backbone
+from detectron2.inference import roi_heads
+
+cfg = get_cfg()
+add_densepose_config(cfg)
+add_timmnets_config(cfg)
+
+STABLE_ONNX_OPSET_VERSION = 11
 def setup_cfg(args):
-    cfg = get_cfg()
     # cuda context is initialized before creating dataloader, so we don't fork anymore
     cfg.DATALOADER.NUM_WORKERS = 0
-    add_pointrend_config(cfg)
+    # add_pointrend_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
     return cfg
+
 
 
 def export_caffe2_tracing(cfg, torch_model, inputs):
@@ -107,18 +124,14 @@ def export_scripting(torch_model):
 # experimental. API not yet final
 def export_tracing(torch_model, inputs):
     assert TORCH_VERSION >= (1, 8)
-    image = inputs[0]["image"]
+    image = inputs[0]
     inputs = [{"image": image}]  # remove other unused keys
 
-    if isinstance(torch_model, GeneralizedRCNN):
 
-        def inference(model, inputs):
-            # use do_postprocess=False so it returns ROI mask
-            inst = model.inference(inputs, do_postprocess=False)[0]
-            return [{"instances": inst}]
-
-    else:
-        inference = None  # assume that we just call the model directly
+    def inference(model, inputs):
+        # use do_postprocess=False so it returns ROI mask
+        inst = model.inference(inputs, do_postprocess=False)[0]
+        return [{"instances": inst}]
 
     traceable_model = TracingAdapter(torch_model, inputs, inference)
 
@@ -126,6 +139,9 @@ def export_tracing(torch_model, inputs):
         ts_model = torch.jit.trace(traceable_model, (image,))
         with PathManager.open(os.path.join(args.output, "model.ts"), "wb") as f:
             torch.jit.save(ts_model, f)
+        print("Checking output of traced model")
+        out = ts_model(image)
+        print("output : ", out)
         dump_torchscript_IR(ts_model, args.output)
     elif args.format == "onnx":
         with PathManager.open(os.path.join(args.output, "model.onnx"), "wb") as f:
@@ -151,29 +167,35 @@ def export_tracing(torch_model, inputs):
     return eval_wrapper
 
 
-def get_sample_inputs(args):
+def get_sample_inputs(args, torchmodel):
+    sample_image = '/Users/pramish/Desktop/Codes/mmexperiments/mm-densepose/data/rgbd/pramish/1.jpg'
 
-    if args.sample_image is None:
-        # get a first batch from dataset
-        data_loader = build_detection_test_loader(cfg, cfg.DATASETS.TEST[0])
-        first_batch = next(iter(data_loader))
-        return first_batch
-    else:
-        # get a sample data
-        original_image = detection_utils.read_image(args.sample_image, format=cfg.INPUT.FORMAT)
-        # Do same preprocessing as DefaultPredictor
-        aug = T.ResizeShortestEdge(
-            [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
-        )
-        height, width = original_image.shape[:2]
-        image = aug.get_transform(original_image).apply_image(original_image)
-        image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+    mapper = DatasetMapper(cfg, is_train=False)
+    inpput = [mapper({'file_name': sample_image})]
+    images = torchmodel.preprocess_image(inpput)
+    print("*" * 100)
+    print(images[0].shape)
+    print(len(images))
+    # plt.imshow(image);
+    # plt.show()
+    print("*" * 100)
 
-        inputs = {"image": image, "height": height, "width": width}
+    # get a sample data
+    original_image = detection_utils.read_image(sample_image, format=cfg.INPUT.FORMAT)
 
-        # Sample ready
-        sample_inputs = [inputs]
-        return sample_inputs
+    # Do same preprocessing as DefaultPredictor
+    aug = T.ResizeShortestEdge(
+        [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
+    )
+    height, width = original_image.shape[:2]
+    image = aug.get_transform(original_image).apply_image(original_image)
+
+    image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+    inputs = {"image": image, "height": height, "width": width}
+
+    # Sample ready
+    sample_inputs = [inputs]
+    return images
 
 
 if __name__ == "__main__":
@@ -221,7 +243,7 @@ if __name__ == "__main__":
     elif args.export_method == "scripting":
         exported_model = export_scripting(torch_model)
     elif args.export_method == "tracing":
-        sample_inputs = get_sample_inputs(args)
+        sample_inputs = get_sample_inputs(args, torch_model)
         exported_model = export_tracing(torch_model, sample_inputs)
 
     # run evaluation with the converted model
